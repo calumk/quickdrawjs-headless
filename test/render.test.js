@@ -324,8 +324,8 @@ describe('fonts', () => {
     // multi-file family only the last file serves text (the other range
     // degrades to .notdef) — each TTF is a merged latin+latin-ext face.
     const files = fontFiles()
-    expect(files).toHaveLength(3)
-    expect(files.every((f) => f.endsWith('.ttf'))).toBe(true)
+    expect(files).toHaveLength(1)
+    expect(files[0].endsWith('.ttf')).toBe(true)
     const c = new Canvas(8, 8)
     const ctx = c.getContext('2d')
     const probe = 'Remember: demo on Friday'
@@ -354,50 +354,30 @@ describe('fonts', () => {
     expect(render(`500 20px 'QuickdrawHand'`)).not.toBe(render('500 20px Georgia'))
   })
 
-  it('resolves the bundled Roboto families identically alone and in-stack', async () => {
-    await renderPng(new Store().getSnapshot(), { width: 32, height: 32, padding: 0 })
-    const { FONTS } = await import('@quickdrawjs/core')
-    const c = new Canvas(8, 8)
-    const ctx = c.getContext('2d')
-    const probe = 'Pack my box 0123456789'
-    // stack measurement must equal the alias measurement: multi-word aliases
-    // fail inside font lists, so both families register single-word names
-    for (const [id, alias] of [['sans', 'Roboto'], ['mono', 'RobotoMono']]) {
-      ctx.font = `500 20px ${alias}`
-      const aliasOnly = ctx.measureText(probe).width
-      expect(aliasOnly).toBeGreaterThan(0)
-      ctx.font = `500 20px ${FONTS[id]}`
-      expect(ctx.measureText(probe).width).toBeCloseTo(aliasOnly, 5)
-    }
-    // mono advances are uniform: every glyph advances (nearly) the same width
-    ctx.font = '500 20px RobotoMono'
-    const narrow = ctx.measureText('i').width
-    const wide = ctx.measureText('W').width
-    expect(Math.abs(narrow - wide)).toBeLessThanOrEqual(narrow * 0.02 + 0.5)
-  })
-
   it('renders developer-registered custom families end to end', async () => {
     // platform + bundled families first: registration state must not depend
     // on which tests ran before this one
     await renderPng(new Store().getSnapshot(), { width: 32, height: 32, padding: 0 })
     const { fontFiles, registerFontFamily } = await import('../src/fonts.js')
     const { setFontStacks, resetFontStacks } = await import('@quickdrawjs/core')
-    const monoTtf = fontFiles().find((f) => f.endsWith('roboto-mono-500.ttf'))
-    expect(monoTtf).toBeTruthy()
-    registerFontFamily('TestMono', [monoTtf])
-    setFontStacks({ mono: "'TestMono', monospace" })
+    // same bundled file under a custom alias: proves the stack→registration
+    // roundtrip without needing extra font binaries in the repo
+    const handTtf = fontFiles().find((f) => f.endsWith('libre-baskerville-500.ttf'))
+    expect(handTtf).toBeTruthy()
+    registerFontFamily('TestHand', [handTtf])
+    setFontStacks({ draw: "'TestHand', serif" })
     try {
       // the override resolves through the whole pipeline, not just measurement
       const c = new Canvas(8, 8)
       const ctx = c.getContext('2d')
-      ctx.font = '500 20px RobotoMono'
+      ctx.font = '500 20px QuickdrawHand'
       const bundled = ctx.measureText('Pack 0123').width
-      ctx.font = `500 20px 'TestMono', monospace`
+      ctx.font = `500 20px 'TestHand', serif`
       expect(ctx.measureText('Pack 0123').width).toBeCloseTo(bundled, 5)
       const store = new Store()
       store.put({
         id: 'shape:cm', typeName: 'shape', type: 'text', x: 10, y: 10, rot: 0, z: 1,
-        props: { text: 'custom mono', size: 'm', color: 'black', font: 'mono' },
+        props: { text: 'custom hand', size: 'm', color: 'black', font: 'draw' },
       })
       const pixels = await readPixels(await renderPng(store.getSnapshot(), {
         width: 220, height: 80, fit: 'viewport',
@@ -407,7 +387,7 @@ describe('fonts', () => {
     } finally {
       resetFontStacks()
     }
-    expect(() => registerFontFamily('', [monoTtf])).toThrowError(RenderError)
+    expect(() => registerFontFamily('', [handTtf])).toThrowError(RenderError)
     expect(() => registerFontFamily('Ghost', ['/nope/missing.ttf'])).toThrowError(
       expect.objectContaining({ code: 'FONT_FILE_MISSING' }),
     )

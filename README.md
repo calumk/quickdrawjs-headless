@@ -112,17 +112,14 @@ is never drawn.
 
 ## Known rendering differences (browser vs server)
 
-- **Fonts.** Three faces ship with the engine and register with Skia before
-  measuring, so wrapping and layout match the browser to 0.1px on probe
-  strings: the hand face (`Quickdraw Hand` / Libre Baskerville, OFL 1.1),
-  `Roboto` for sans and `Roboto Mono` for mono (both Apache 2.0, see
-  `packages/core/src/fonts/ROBOTO-LICENSE.txt`). Only the `serif` stack still
-  falls back to system fonts (Iowan/Palatino/Georgia). Three skia-canvas
-  quirks dictate the server packaging (one merged TTF per family, single-word
-  aliases heading the shared stacks): it cannot shape from woff2, multi-word
-  family names never match inside font lists, and for a multi-file family
-  only the last file serves text — browsers match either name to
-  byte-identical woff2 files, so nothing they render changes. Antialiasing
+- **Fonts.** The hand face (`Quickdraw Hand` / Libre Baskerville, OFL 1.1)
+  registers with Skia before measuring, so its wrapping and layout match the
+  browser to 0.1px on probe strings. The `sans`/`serif`/`mono` stacks use
+  system fonts as upstream (bundling them would silently restyle existing
+  boards) — see "Custom fonts" to pin those down. Server packaging notes
+  (one merged TTF, single-word alias heading the stack): skia-canvas cannot
+  shape from woff2, multi-word family names never match inside font lists,
+  and for a multi-file family only the last file serves text. Antialiasing
   differs slightly (Skia vs CoreGraphics/DirectWrite), so server text
   rasterizes a touch lighter than CoreText at the same weight.
 - **Highlighters on transparency.** Multiply blending is designed for paper;

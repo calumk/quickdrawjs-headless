@@ -20,8 +20,6 @@ import { RenderError } from './errors.js'
 
 const FAMILIES = [
   { name: 'QuickdrawHand', files: ['libre-baskerville-500.ttf'] },
-  { name: 'Roboto', files: ['roboto-500.ttf'] },
-  { name: 'RobotoMono', files: ['roboto-mono-500.ttf'] },
 ]
 
 const registered = new Set()

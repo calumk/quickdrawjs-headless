@@ -320,16 +320,26 @@ describe('fonts', () => {
     await renderPng(new Store().getSnapshot(), { width: 32, height: 32, padding: 0 })
     const { fontsReady, fontFiles } = await import('../src/fonts.js')
     expect(fontsReady()).toBe(true)
-    // TTF: skia-canvas cannot shape from the woff2 files (silent wrong face)
-    expect(fontFiles().every((f) => f.endsWith('.ttf'))).toBe(true)
+    // Exactly one TTF: skia-canvas cannot shape from woff2, and for a
+    // multi-file family only the last file serves text (the other range
+    // degrades to .notdef) — the TTF is the merged latin+latin-ext face.
+    const files = fontFiles()
+    expect(files).toHaveLength(1)
+    expect(files[0].endsWith('.ttf')).toBe(true)
     const c = new Canvas(8, 8)
     const ctx = c.getContext('2d')
     const probe = 'Remember: demo on Friday'
-    ctx.font = `500 26px 'Quickdraw Hand', 'Libre Baskerville', Georgia, serif`
-    const hand = ctx.measureText(probe).width
-    // ...diverges from the generic serif a silent fallback would use
-    ctx.font = '500 26px serif'
-    expect(Math.abs(hand - ctx.measureText(probe).width)).toBeGreaterThan(10)
+    // the alias must resolve identically alone and inside the full stack:
+    // multi-word aliases fail inside font lists in skia-canvas, which is how
+    // the fallback slipped in undetected the first time
+    ctx.font = '500 20px QuickdrawHand'
+    const aliasOnly = ctx.measureText(probe).width
+    ctx.font = `500 20px 'QuickdrawHand', 'Quickdraw Hand', 'Libre Baskerville', Georgia, serif`
+    const stacked = ctx.measureText(probe).width
+    expect(stacked).toBeCloseTo(aliasOnly, 5)
+    // ...and the bundled Baskerville must actually be active, not a fallback
+    ctx.font = '500 20px serif'
+    expect(Math.abs(stacked - ctx.measureText(probe).width)).toBeGreaterThan(10)
     // ...and rasterizes differently from a Georgia fallback
     const render = (font) => {
       const c2 = new Canvas(400, 60)

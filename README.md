@@ -112,13 +112,18 @@ is never drawn.
 
 - **Fonts.** The hand font (`Quickdraw Hand` / Libre Baskerville, OFL —
   `packages/core/src/fonts/`) is registered with Skia before measuring, so
-  wrapping and layout use the real face. The server registers the TTF files:
-  skia-canvas cannot shape from the woff2 files (it reads their metadata but
-  renders a fallback face), while browsers keep using woff2 via
-  `quickdraw.css` — same licensed files either way. The `sans`/`serif`/`mono`
-  stacks fall back to Skia defaults, which differ from macOS/iOS system fonts;
-  text set in those faces may measure a few percent differently.
-  Antialiasing also differs slightly (Skia vs CoreGraphics/DirectWrite).
+  wrapping and layout use the real face and match the browser to 0.1px on
+  probe strings. Two skia-canvas quirks force the server onto a different
+  packaging of the same outlines: it cannot shape from woff2 (reads metadata,
+  renders a fallback), multi-word family names never match inside font lists,
+  and for a multi-file family only the last file serves text. So the server
+  registers one merged `libre-baskerville-500.ttf` (latin+latin-ext) under the
+  single-word alias `QuickdrawHand`, which heads the shared font stack;
+  browsers match either name to byte-identical woff2 files via
+  `quickdraw.css`, so nothing they render changes. The `sans`/`serif`/`mono`
+  stacks still fall back to Skia defaults, which differ from macOS/iOS system
+  fonts. Antialiasing also differs slightly (Skia vs CoreGraphics/DirectWrite),
+  so server text rasterizes a touch lighter than CoreText at the same weight.
 - **Highlighters on transparency.** Multiply blending is designed for paper;
   on a transparent background the band composites against nothing, so it reads
   denser than on the board. Prefer `background: 'theme'` for paper-faithful

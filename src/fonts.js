@@ -9,7 +9,12 @@ import { createRequire } from 'node:module'
 import { existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 
-const FAMILY = 'Quickdraw Hand'
+// 'QuickdrawHand' (single word, no space): skia-canvas matches multi-word
+// family names only as a sole family, never inside a font list — and the
+// engine always measures/draws with the full stack — so the spaced alias
+// silently falls through to a wrong face. Same files either way; browsers
+// match both names via quickdraw.css.
+const FAMILY = 'QuickdrawHand'
 
 let registered = false
 
@@ -17,14 +22,13 @@ export function fontFiles() {
   const require = createRequire(import.meta.url)
   const coreRoot = dirname(require.resolve('@quickdrawjs/core/package.json'))
   const dir = join(coreRoot, 'src/fonts')
-  // Prefer TTF: skia-canvas parses woff2 metadata but cannot shape from it
-  // (silently falls back to a wrong face), while TTF renders the true face.
-  // The browser keeps using woff2 via quickdraw.css — same licensed files.
-  const ttf = [
-    join(dir, 'libre-baskerville-latin-500.ttf'),
-    join(dir, 'libre-baskerville-latin-ext-500.ttf'),
-  ]
-  if (ttf.every((f) => existsSync(f))) return ttf
+  // One merged TTF covering latin + latin-ext. Two reasons for exactly one
+  // file: skia-canvas cannot shape from woff2 (silently renders a fallback
+  // face), and for a multi-file family only the LAST registered file serves
+  // text — so split files leave one range as .notdef. The browser keeps using
+  // the split woff2 files via quickdraw.css — same licensed outlines.
+  const merged = join(dir, 'libre-baskerville-500.ttf')
+  if (existsSync(merged)) return [merged]
   return [
     join(dir, 'libre-baskerville-latin-500.woff2'),
     join(dir, 'libre-baskerville-latin-ext-500.woff2'),

@@ -58,6 +58,7 @@ export declare class RenderError extends Error {
 export declare function registerFonts(): boolean
 export declare function fontsReady(): boolean
 export declare function fontFiles(): string[]
+export declare function fontFamilies(): string[]
 export declare function installPlatform(): void
 export declare function platformInfo(): {
   installed: boolean

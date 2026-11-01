@@ -110,20 +110,19 @@ is never drawn.
 
 ## Known rendering differences (browser vs server)
 
-- **Fonts.** The hand font (`Quickdraw Hand` / Libre Baskerville, OFL —
-  `packages/core/src/fonts/`) is registered with Skia before measuring, so
-  wrapping and layout use the real face and match the browser to 0.1px on
-  probe strings. Two skia-canvas quirks force the server onto a different
-  packaging of the same outlines: it cannot shape from woff2 (reads metadata,
-  renders a fallback), multi-word family names never match inside font lists,
-  and for a multi-file family only the last file serves text. So the server
-  registers one merged `libre-baskerville-500.ttf` (latin+latin-ext) under the
-  single-word alias `QuickdrawHand`, which heads the shared font stack;
-  browsers match either name to byte-identical woff2 files via
-  `quickdraw.css`, so nothing they render changes. The `sans`/`serif`/`mono`
-  stacks still fall back to Skia defaults, which differ from macOS/iOS system
-  fonts. Antialiasing also differs slightly (Skia vs CoreGraphics/DirectWrite),
-  so server text rasterizes a touch lighter than CoreText at the same weight.
+- **Fonts.** Three faces ship with the engine and register with Skia before
+  measuring, so wrapping and layout match the browser to 0.1px on probe
+  strings: the hand face (`Quickdraw Hand` / Libre Baskerville, OFL 1.1),
+  `Roboto` for sans and `Roboto Mono` for mono (both Apache 2.0, see
+  `packages/core/src/fonts/ROBOTO-LICENSE.txt`). Only the `serif` stack still
+  falls back to system fonts (Iowan/Palatino/Georgia). Three skia-canvas
+  quirks dictate the server packaging (one merged TTF per family, single-word
+  aliases heading the shared stacks): it cannot shape from woff2, multi-word
+  family names never match inside font lists, and for a multi-file family
+  only the last file serves text — browsers match either name to
+  byte-identical woff2 files, so nothing they render changes. Antialiasing
+  differs slightly (Skia vs CoreGraphics/DirectWrite), so server text
+  rasterizes a touch lighter than CoreText at the same weight.
 - **Highlighters on transparency.** Multiply blending is designed for paper;
   on a transparent background the band composites against nothing, so it reads
   denser than on the board. Prefer `background: 'theme'` for paper-faithful

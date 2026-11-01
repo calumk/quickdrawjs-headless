@@ -320,12 +320,12 @@ describe('fonts', () => {
     await renderPng(new Store().getSnapshot(), { width: 32, height: 32, padding: 0 })
     const { fontsReady, fontFiles } = await import('../src/fonts.js')
     expect(fontsReady()).toBe(true)
-    // Exactly one TTF: skia-canvas cannot shape from woff2, and for a
+    // Exactly one TTF per family: skia-canvas cannot shape from woff2, and for a
     // multi-file family only the last file serves text (the other range
-    // degrades to .notdef) — the TTF is the merged latin+latin-ext face.
+    // degrades to .notdef) — each TTF is a merged latin+latin-ext face.
     const files = fontFiles()
-    expect(files).toHaveLength(1)
-    expect(files[0].endsWith('.ttf')).toBe(true)
+    expect(files).toHaveLength(3)
+    expect(files.every((f) => f.endsWith('.ttf'))).toBe(true)
     const c = new Canvas(8, 8)
     const ctx = c.getContext('2d')
     const probe = 'Remember: demo on Friday'
@@ -351,7 +351,29 @@ describe('fonts', () => {
       x2.fillText(probe, 10, 40)
       return x2.getImageData(0, 0, 400, 60).data.join(',')
     }
-    expect(render(`500 26px 'Quickdraw Hand'`)).not.toBe(render('500 26px Georgia'))
+    expect(render(`500 20px 'QuickdrawHand'`)).not.toBe(render('500 20px Georgia'))
+  })
+
+  it('resolves the bundled Roboto families identically alone and in-stack', async () => {
+    await renderPng(new Store().getSnapshot(), { width: 32, height: 32, padding: 0 })
+    const { FONTS } = await import('@quickdrawjs/core')
+    const c = new Canvas(8, 8)
+    const ctx = c.getContext('2d')
+    const probe = 'Pack my box 0123456789'
+    // stack measurement must equal the alias measurement: multi-word aliases
+    // fail inside font lists, so both families register single-word names
+    for (const [id, alias] of [['sans', 'Roboto'], ['mono', 'RobotoMono']]) {
+      ctx.font = `500 20px ${alias}`
+      const aliasOnly = ctx.measureText(probe).width
+      expect(aliasOnly).toBeGreaterThan(0)
+      ctx.font = `500 20px ${FONTS[id]}`
+      expect(ctx.measureText(probe).width).toBeCloseTo(aliasOnly, 5)
+    }
+    // mono advances are uniform: every glyph advances (nearly) the same width
+    ctx.font = '500 20px RobotoMono'
+    const narrow = ctx.measureText('i').width
+    const wide = ctx.measureText('W').width
+    expect(Math.abs(narrow - wide)).toBeLessThanOrEqual(narrow * 0.02 + 0.5)
   })
 })
 

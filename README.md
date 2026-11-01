@@ -27,7 +27,9 @@ await writeFile('output.png', png) // png is a Node.js Buffer
 
 Requires **Node.js 18+**. `skia-canvas` ships prebuilt binaries for macOS,
 Linux and Windows — no build step on supported platforms (see its docs for
-missing-lib errors on minimal Linux images).
+missing-lib errors on minimal Linux images). The package also runs
+unmodified under **Bun 1.x** (same code paths, byte-identical PNG output —
+verified against Node on shapes, text, images, themes and error codes).
 
 ```bash
 npm install @quickdrawjs/headless

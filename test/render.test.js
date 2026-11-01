@@ -5,11 +5,21 @@ import { describe, it, expect } from 'vitest'
 import { Canvas } from 'skia-canvas'
 import { Store, THEMES } from '@quickdrawjs/core'
 
-import { renderPng, RenderError } from '../src/index.js'
+import { renderPng as renderPngStrict, RenderError } from '../src/index.js'
+import { hasSeam } from '../src/compat.js'
 import {
   PNG_SIG, pngMeta, readPixels, px, countOpaque,
   kitchenSink, testImageURL, snapshotWithImage,
 } from './helpers.mjs'
+
+// The suite runs against whatever core is installed: patched cores exercise
+// the strict path, stock releases run the same assertions through compat
+// shims — except the layered-ordering test below, which pins behavior only
+// the seam can express.
+import * as coreNs from '@quickdrawjs/core'
+
+const compatOpts = hasSeam(coreNs) ? {} : { compat: 'monkeypatch' }
+const renderPng = (snapshot, options) => renderPngStrict(snapshot, { ...compatOpts, ...options })
 
 const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)]
 
@@ -204,7 +214,10 @@ describe('text and sticky notes', () => {
   })
 
   it('wraps long note text onto multiple lines', async () => {
-    const { noteLayout } = await import('@quickdrawjs/core')
+    const { resolveHelper, installGlobals } = await import('../src/compat.js')
+    installGlobals() // unpatched core measures through the shimmed canvas
+    const coreNs = await import('@quickdrawjs/core')
+    const noteLayout = await resolveHelper(coreNs, 'noteLayout', 'src/shapes.js')
     const layout = noteLayout({
       id: 'shape:n', typeName: 'shape', type: 'note', x: 0, y: 0, rot: 0, z: 1,
       props: { text: 'word '.repeat(40).trim(), size: 'm', color: 'yellow', font: 'draw' },
@@ -316,9 +329,9 @@ describe('fills, themes, backgrounds', () => {
 
 describe('fonts', () => {
   it('registers the true hand face — measurement never falls back silently', async () => {
-    // ensure the platform (and its fonts) is installed
-    await renderPng(new Store().getSnapshot(), { width: 32, height: 32, padding: 0 })
-    const { fontsReady, fontFiles } = await import('../src/fonts.js')
+    // register directly: this must hold without any render having run first
+    const { registerFonts, fontsReady, fontFiles } = await import('../src/fonts.js')
+    expect(registerFonts()).toBe(true)
     expect(fontsReady()).toBe(true)
     // Exactly one TTF per family: skia-canvas cannot shape from woff2, and for a
     // multi-file family only the last file serves text (the other range
@@ -355,25 +368,26 @@ describe('fonts', () => {
   })
 
   it('renders developer-registered custom families end to end', async () => {
-    // platform + bundled families first: registration state must not depend
-    // on which tests ran before this one
-    await renderPng(new Store().getSnapshot(), { width: 32, height: 32, padding: 0 })
     const { fontFiles, registerFontFamily } = await import('../src/fonts.js')
-    const { setFontStacks, resetFontStacks } = await import('@quickdrawjs/core')
+    const { hasSeam } = await import('../src/compat.js')
+    const coreNs = await import('@quickdrawjs/core')
     // same bundled file under a custom alias: proves the stack→registration
     // roundtrip without needing extra font binaries in the repo
     const handTtf = fontFiles().find((f) => f.endsWith('libre-baskerville-500.ttf'))
     expect(handTtf).toBeTruthy()
     registerFontFamily('TestHand', [handTtf])
+    const c = new Canvas(8, 8)
+    const ctx = c.getContext('2d')
+    ctx.font = '500 20px QuickdrawHand'
+    const bundled = ctx.measureText('Pack 0123').width
+    ctx.font = `500 20px 'TestHand', serif`
+    expect(ctx.measureText('Pack 0123').width).toBeCloseTo(bundled, 5)
+    // the override→render pipeline needs the seam's fontStackOf; unpatched
+    // cores only get registration + measurement here
+    if (!hasSeam(coreNs)) return
+    const { setFontStacks, resetFontStacks } = coreNs
     setFontStacks({ draw: "'TestHand', serif" })
     try {
-      // the override resolves through the whole pipeline, not just measurement
-      const c = new Canvas(8, 8)
-      const ctx = c.getContext('2d')
-      ctx.font = '500 20px QuickdrawHand'
-      const bundled = ctx.measureText('Pack 0123').width
-      ctx.font = `500 20px 'TestHand', serif`
-      expect(ctx.measureText('Pack 0123').width).toBeCloseTo(bundled, 5)
       const store = new Store()
       store.put({
         id: 'shape:cm', typeName: 'shape', type: 'text', x: 10, y: 10, rot: 0, z: 1,
@@ -387,6 +401,11 @@ describe('fonts', () => {
     } finally {
       resetFontStacks()
     }
+  })
+
+  it('rejects bad custom-family registrations', async () => {
+    const { fontFiles, registerFontFamily } = await import('../src/fonts.js')
+    const handTtf = fontFiles().find((f) => f.endsWith('libre-baskerville-500.ttf'))
     expect(() => registerFontFamily('', [handTtf])).toThrowError(RenderError)
     expect(() => registerFontFamily('Ghost', ['/nope/missing.ttf'])).toThrowError(
       expect.objectContaining({ code: 'FONT_FILE_MISSING' }),
@@ -475,7 +494,7 @@ describe('dependency hygiene', () => {
     for (const banned of ['puppeteer', 'playwright', 'chromium', 'jsdom', 'happy-dom']) {
       expect(deps.toLowerCase()).not.toContain(banned)
     }
-    const src = ['index.js', 'render.js', 'platform.js', 'assets.js', 'fonts.js', 'errors.js']
+    const src = ['index.js', 'render.js', 'platform.js', 'assets.js', 'fonts.js', 'errors.js', 'compat.js']
       .map((f) => readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'))
       .join('\n')
     // no browser-automation imports and no browser-global *use*:
@@ -487,8 +506,8 @@ describe('dependency hygiene', () => {
     ]) {
       expect(src).not.toContain(banned)
     }
-    // no browser-automation imports and no browser-global *use* in code
-    // (error-message prose mentioning `document.store` is stripped first)
+    // 'document.createElement' appears below only inside a shim error message
+    // (string literals are stripped before this check runs).
     const code = src.replace(/(['"`])(?:(?!\1)[^\\]|\\.)*\1/gs, '')
     expect(code).not.toMatch(/(^|[^.'"\w])(window|document)\.[a-zA-Z]/m)
   })

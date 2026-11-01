@@ -99,6 +99,8 @@ is complete. Output dimensions always equal `width × height`.
 | `INVALID_THEME` | Not `'light'`/`'dark'`. |
 | `INVALID_BACKGROUND` | Not `'transparent'`/`'theme'`/valid CSS color. |
 | `INVALID_FIT` / `INVALID_VIEWPORT` / `INVALID_PADDING` | Bad fit, viewport or padding. |
+| `INVALID_COMPAT` | Bad `compat` option value. |
+| `CORE_TOO_OLD` | Installed core lacks the server-renderer exports (strict mode). Upgrade core or use `compat: 'monkeypatch'`. |
 | `SNAPSHOT_TOO_LARGE` | Over 100k records. |
 | `ASSET_MISSING` | Image shape whose asset record is absent. |
 | `ASSET_EXTERNAL_URL` | `http(s)`/non-data URI — never fetched. |
@@ -201,10 +203,29 @@ same files. In the browser, load the same faces with `@font-face` so both
 sides shape identical outlines. Like the stacks, registration is
 process-global: configure once at startup, not per request.
 
+## Compat mode (`compat: 'monkeypatch'`)
+
+The default (`compat: 'strict'`) needs a core release carrying the
+server-renderer exports and throws `CORE_TOO_OLD` without them. Against a
+stock core — including today's published `@quickdrawjs/core` — pass
+`compat: 'monkeypatch'` to render anyway, via explicitly opt-in shims:
+
+- missing browser globals (`Path2D`, `OffscreenCanvas`, `Image`,
+  `document`) are defined from Skia equivalents, only when absent;
+- helpers missing from core's exports are deep-imported from its files;
+- paint order mirrors released core (highlighter-beneath, rest by z);
+- the bundled hand face is pointed at through the mutable `FONTS` object.
+
+Same shapes, same validation and error codes — with three documented
+differences: released-core (not layered) paint order, one process-wide
+image/pattern cache instead of per-render isolation, and no custom font
+stacks (those need the seam). The example script falls back to it
+automatically with a warning.
+
 ## Tests
 
 ```bash
-npm test            # 26 tests, Node env (no jsdom)
+npm test            # 38 tests, Node env (no jsdom)
 ```
 
 Coverage: blank snapshots, every shape type, z-order, highlighter-beneath,
@@ -213,7 +234,10 @@ was returned”), rotation/scale, pattern fills, negative coordinates,
 content-fit centering, transparency, both themes, exact dimensions,
 deterministic re-renders, concurrent renders, invalid-input codes — and a
 clean-process test proving `window`/`document`/`OffscreenCanvas`/`Image`/
-`Path2D` are all absent during rendering.
+`Path2D` are all absent during rendering — plus the compat suite (mode
+resolution, shims, shimmed image warming, monkeypatch renders and
+strict/monkeypatch parity where the installed core allows it). The suite
+runs green against both patched and stock core releases.
 
 ## Example
 

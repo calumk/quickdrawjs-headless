@@ -12,9 +12,9 @@
 // that heads its stack: 'QuickdrawHand', 'Roboto', 'RobotoMono'.
 
 import { FontLibrary } from 'skia-canvas'
-import { createRequire } from 'node:module'
 import { existsSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { RenderError } from './errors.js'
 
@@ -25,18 +25,16 @@ const FAMILIES = [
 const registered = new Set()
 
 export function fontFiles() {
-  const require = createRequire(import.meta.url)
-  const coreRoot = dirname(require.resolve('@quickdrawjs/core/package.json'))
-  const dir = join(coreRoot, 'src/fonts')
+  // Vendored beside this package (fonts/), not resolved from core: the face
+  // must ship with the renderer so installs work against any core release.
+  const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'fonts')
   return FAMILIES.flatMap((f) => f.files.map((file) => join(dir, file))).filter((f) =>
     existsSync(f),
   )
 }
 
 export function registerFonts() {
-  const require = createRequire(import.meta.url)
-  const coreRoot = dirname(require.resolve('@quickdrawjs/core/package.json'))
-  const dir = join(coreRoot, 'src/fonts')
+  const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'fonts')
   for (const f of FAMILIES) {
     if (registered.has(f.name)) continue
     const files = f.files.map((file) => join(dir, file)).filter((p) => existsSync(p))

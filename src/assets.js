@@ -26,11 +26,21 @@ export function referencedAssets(shapes) {
   return [...ids]
 }
 
-// Decode one asset record into a Skia image. Throws RenderError.
-async function decodeAsset(asset) {
-  const src = asset?.src
+// Look up an asset record and validate everything short of decoding it:
+// presence, embed policy (data URLs only, never fetched) and size caps.
+// Returns the record. Throws RenderError. Shared by both decode paths.
+export function getUsableAsset(store, id) {
+  const asset = store.asset(id)
+  if (!asset) {
+    throw new RenderError(
+      'ASSET_MISSING',
+      `Image shape references asset '${id}', which is not in the snapshot. ` +
+        `Snapshots must include their asset records under document.store.`,
+    )
+  }
+  const src = asset.src
   if (typeof src !== 'string' || src.length === 0) {
-    throw new RenderError('ASSET_MISSING', `Image asset '${asset?.id ?? '?'}' has no embedded data.`)
+    throw new RenderError('ASSET_MISSING', `Image asset '${asset.id}' has no embedded data.`)
   }
   if (/^https?:\/\//i.test(src) || /^\/\//.test(src)) {
     throw new RenderError(
@@ -45,22 +55,25 @@ async function decodeAsset(asset) {
       `Image asset '${asset.id}' uses an unsupported URI scheme. Only embedded data-URL images can be rendered.`,
     )
   }
-  const m = DATA_IMAGE_RE.exec(src)
-  if (!m) {
+  if (!DATA_IMAGE_RE.test(src)) {
     throw new RenderError(
       'ASSET_INVALID',
       `Image asset '${asset.id}' is not an embedded data-URL image. Only data:image/... assets can be rendered.`,
     )
   }
-  const approxBytes = Math.ceil(src.length * 0.75)
-  if (approxBytes > MAX_ASSET_BYTES) {
+  if (Math.ceil(src.length * 0.75) > MAX_ASSET_BYTES) {
     throw new RenderError(
       'ASSET_TOO_LARGE',
       `Image asset '${asset.id}' is too large to decode (over ${MAX_ASSET_BYTES} bytes).`,
     )
   }
+  return asset
+}
+
+// Decode one asset record into a Skia image. Throws RenderError.
+async function decodeAsset(asset) {
   try {
-    return await loadImage(src)
+    return await loadImage(asset.src)
   } catch (e) {
     throw new RenderError(
       'ASSET_DECODE_FAILED',
@@ -81,15 +94,7 @@ export async function loadAssets(store, assetIds) {
   }
   await Promise.all(
     assetIds.map(async (id) => {
-      const asset = store.asset(id)
-      if (!asset) {
-        throw new RenderError(
-          'ASSET_MISSING',
-          `Image shape references asset '${id}', which is not in the snapshot. ` +
-            `Snapshots must include their asset records under document.store.`,
-        )
-      }
-      images.set(id, await decodeAsset(asset))
+      images.set(id, await decodeAsset(getUsableAsset(store, id)))
     }),
   )
   return images

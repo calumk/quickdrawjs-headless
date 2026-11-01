@@ -1,6 +1,6 @@
 {
   "name": "@quickdrawjs/headless",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Server-side PNG renderer for Quickdraw documents. Node.js-only, no browser or Chromium — Skia canvas backend reusing the core drawing engine.",
   "type": "module",
   "main": "./src/index.js",
@@ -16,6 +16,7 @@
   "files": [
     "src",
     "types",
+    "fonts",
     "README.md"
   ],
   "scripts": {

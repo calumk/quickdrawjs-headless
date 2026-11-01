@@ -8,18 +8,18 @@
 // (drawShape) and the theme/geometry helpers cross into Node.
 
 import { Canvas, Path2D } from 'skia-canvas'
-import {
-  Store,
-  themeOf,
-  pageBounds,
-  boundsUnion,
-  boundsExpand,
-  drawShape,
-  sortShapesForRender,
-} from '@quickdrawjs/core'
+
+// Namespace import (never bare named imports): unpatched core releases lack
+// some of these names, and a missing named import would fail at link time.
+// Capability is feature-detected per render instead (see compat.js).
+import * as coreNs from '@quickdrawjs/core'
 
 import { installPlatform } from './platform.js'
 import { referencedAssets, loadAssets } from './assets.js'
+import {
+  hasSeam, resolveMode, installGlobals, legacySort,
+  resolveHelper, patchFontStacks, warmImageCache,
+} from './compat.js'
 import { RenderError } from './errors.js'
 
 export { RenderError }
@@ -31,6 +31,7 @@ export const DEFAULTS = {
   background: 'transparent',
   fit: 'content',
   padding: 40,
+  compat: 'strict',
 }
 
 // Guards against unbounded work from untrusted snapshots or options.
@@ -98,7 +99,24 @@ function checkOptions(options = {}) {
       `viewport is only used with fit: 'viewport'. Omit it or set fit: 'viewport'.`,
     )
   }
+  if (o.compat !== 'strict' && o.compat !== 'monkeypatch') {
+    throw new RenderError('INVALID_COMPAT', `compat must be 'strict' or 'monkeypatch' (got ${o.compat}).`)
+  }
   return { ...o, viewport }
+}
+
+// The public core surface every mode needs. Anything older is not a core
+// this renderer supports — fail loudly instead of crashing mid-render.
+function requirePublic(coreNs) {
+  for (const k of ['Store', 'themeOf', 'THEMES', 'pageBounds', 'drawShape', 'FONTS']) {
+    if (coreNs[k] === undefined || coreNs[k] === null) {
+      throw new RenderError(
+        'CORE_TOO_OLD',
+        `Installed @quickdrawjs/core exposes no ${k}. Upgrade core to use this package.`,
+      )
+    }
+  }
+  return coreNs
 }
 
 function checkViewport(v) {
@@ -181,10 +199,15 @@ function fitTransform(rect, width, height, padding, maxScale = Infinity) {
  * @param {number} [options.height=1080] output pixels (1..8192).
  * @param {'light'|'dark'} [options.theme='light']
  * @param {string} [options.background='transparent'] 'transparent', 'theme' or a CSS color.
- * @param {'content'|'viewport'} [options.fit='content'] 'content' fits all shapes;
+ * @param {'content'|'viewport'} [options.fit='content'] 'content' fits every shape;
  *   'viewport' fits options.viewport exactly.
  * @param {{x,y,w,h}} [options.viewport] page-space rect, required with fit 'viewport'.
  * @param {number} [options.padding=40] output-pixel margin around the fitted rect.
+ * @param {'strict'|'monkeypatch'} [options.compat='strict'] 'strict' needs a
+ *   core with the server-renderer exports (throws CORE_TOO_OLD without them);
+ *   'monkeypatch' renders against a stock core via shims — same shapes, but
+ *   released-core paint order, a shared global image cache, and no custom
+ *   font stacks (see README).
  * @returns {Promise<Buffer>} PNG bytes. Always resolves after all assets are
  *   decoded and drawing is complete.
  *
@@ -192,17 +215,43 @@ function fitTransform(rect, width, height, padding, maxScale = Infinity) {
  * size. Invalid input throws RenderError with a stable `code`.
  */
 export async function renderPng(snapshot, options = {}) {
-  installPlatform()
   const o = checkOptions(options)
   checkSnapshot(snapshot)
+  const core = requirePublic(coreNs)
+  const mode = resolveMode(core, o.compat)
 
-  const store = new Store()
+  // Geometry helpers: public on patched cores, deep-imported otherwise.
+  // sortShapesForRender only exists patched; monkeypatch mirrors released
+  // core's own ordering instead (see compat.js).
+  const boundsUnion = await resolveHelper(core, 'boundsUnion', 'src/geometry.js')
+  const boundsExpand = await resolveHelper(core, 'boundsExpand', 'src/geometry.js')
+  const sortFn = mode === 'monkeypatch'
+    ? legacySort
+    : await resolveHelper(core, 'sortShapesForRender', 'src/shapes.js')
+
+  if (mode === 'monkeypatch') {
+    installGlobals()
+    installPlatform({})
+    patchFontStacks(core)
+  } else {
+    installPlatform({ setShapePlatform: core.setShapePlatform })
+  }
+
+  const store = new core.Store()
   store.loadSnapshot(snapshot)
-  const theme = themeOf(o.theme)
-  const shapes = sortShapesForRender(store.shapes())
+  const theme = core.themeOf(o.theme)
+  const shapes = sortFn(store.shapes())
 
-  // Decode every referenced image before a single shape is drawn.
-  const images = await loadAssets(store, referencedAssets(shapes))
+  let images = null
+  if (mode === 'monkeypatch') {
+    // Unpatched drawShape cannot take a per-render image map: warm core's
+    // global image cache instead, so the synchronous draw pass finds real
+    // bitmaps instead of placeholders.
+    await warmImageCache(store, referencedAssets(shapes), core)
+  } else {
+    // Decode every referenced image before a single shape is drawn.
+    images = await loadAssets(store, referencedAssets(shapes))
+  }
 
   const canvas = new Canvas(o.width, o.height)
   const ctx = canvas.getContext('2d')
@@ -220,7 +269,7 @@ export async function renderPng(snapshot, options = {}) {
     let b = null
     for (const s of shapes) {
       try {
-        b = boundsUnion(b, pageBounds(s))
+        b = boundsUnion(b, core.pageBounds(s))
       } catch {
         // A malformed shape record must not sink the whole export.
         continue
@@ -239,9 +288,9 @@ export async function renderPng(snapshot, options = {}) {
     const cap = o.fit === 'content' ? LIMITS.maxFitScale : Infinity
     const { scale, ox, oy } = fitTransform(rect, o.width, o.height, o.padding, cap)
     ctx.setTransform(scale, 0, 0, scale, ox, oy)
-    const patternCache = new Map() // per render: no cross-request state
+    const patternCache = new Map() // per render (strict path honors it)
     for (const s of shapes) {
-      drawShape(ctx, s, { theme, store, zoom: scale, images, patternCache, Path2D })
+      core.drawShape(ctx, s, { theme, store, zoom: scale, images, patternCache, Path2D })
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0)
   }

@@ -28,6 +28,13 @@ export interface RenderOptions {
   viewport?: HeadlessViewport
   /** Output-pixel margin around the fitted rect. Default 40. */
   padding?: number
+  /**
+   * 'strict' (default) needs a core with the server-renderer exports and
+   * throws CORE_TOO_OLD without them; 'monkeypatch' renders against a stock
+   * core via shims — same shapes, but released-core paint order, a shared
+   * global image cache, and no custom font stacks.
+   */
+  compat?: 'strict' | 'monkeypatch'
 }
 
 /** Snapshot envelope produced by `store.getSnapshot()`. */

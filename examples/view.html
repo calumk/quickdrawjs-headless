@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quickdraw headless example — browser reference</title>
+<link rel="stylesheet" href="../../core/src/quickdraw.css">
+<style>
+  html, body { margin: 0; height: 100%; }
+  #board { position: fixed; inset: 0; }
+  #label {
+    position: fixed; left: 12px; bottom: 10px; z-index: 10;
+    font: 12px/1.4 system-ui, sans-serif; color: #666; background: #fff;
+    border: 1px solid #ddd; border-radius: 8px; padding: 6px 10px;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="board"></div>
+<div id="label">Browser render of <code>board.json</code> — compare with <code>board.png</code> (headless render).</div>
+<script type="module">
+  import { Editor, pageBounds } from '../../core/src/index.js'
+  import { boundsUnion } from '../../core/src/geometry.js'
+
+  const snapshot = await (await fetch('./board.json')).json()
+  const editor = new Editor({
+    container: document.getElementById('board'),
+    theme: 'light',
+    readonly: true,
+    hideUi: true,
+    watermark: false,
+  })
+  editor.store.loadSnapshot(snapshot)
+
+  // Fit all shapes into view (same idea as headless content-fit).
+  const fit = () => {
+    const shapes = editor.store.shapes()
+    let b = null
+    for (const s of shapes) b = boundsUnion(b, pageBounds(s))
+    if (!b) return
+    const W = innerWidth, H = innerHeight, pad = 48
+    const z = Math.min((W - pad * 2) / b.w, (H - pad * 2) / b.h)
+    editor.setCamera({ x: pad / z - b.x, y: pad / z - b.y, z })
+  }
+  fit()
+  addEventListener('resize', fit)
+</script>
+</body>
+</html>

@@ -74,18 +74,30 @@
     try {
       const c = document.createElement('canvas').getContext('2d')
       for (const [k, f] of [
-        ['stack', `500 20px 'Quickdraw Hand', 'Libre Baskerville', Georgia, serif`],
+        ['hand-only', `500 20px 'Quickdraw Hand'`],
+        ['libre-only', `500 20px 'Libre Baskerville'`],
         ['georgia', '500 20px Georgia, serif'],
+        ['space', `500 20px 'Quickdraw Hand'`],
       ]) {
         c.font = f
-        widths[k] = +c.measureText(probe).width.toFixed(1)
+        widths[k] = k === 'space'
+          ? +c.measureText(' ').width.toFixed(2)
+          : +c.measureText(probe).width.toFixed(1)
       }
+      widths.dpr = devicePixelRatio
     } catch { widths.err = 'n/a' }
     let faces = 'n/a'
     try { faces = [...document.fonts].map((f) => `${f.family}/${f.weight}/${f.status}`).join(', ') } catch {}
+    let fontUrls = 'n/a'
+    try {
+      fontUrls = performance.getEntriesByType('resource')
+        .filter((r) => /woff2|ttf/i.test(r.name))
+        .map((r) => `${r.name.split('/').slice(-2).join('/')} (${Math.round(r.transferSize / 100) / 10}kB)`).join(', ') || 'none'
+    } catch {}
     el.innerHTML =
       `<b>browser metrics</b> Quickdraw-Hand-active=${handOk}<br>` +
       `faces: ${faces}<br>` +
+      `font-files: ${fontUrls}<br>` +
       `probe20: ${JSON.stringify(widths)}<br>` +
       notes.map((n) => `<b>${n.id}</b> [${n.size}] ${JSON.stringify(n.text)}<br>↳ ${JSON.stringify(n.lines)}`).join('<br>')
   }

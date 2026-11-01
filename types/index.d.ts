@@ -59,6 +59,12 @@ export declare function registerFonts(): boolean
 export declare function fontsReady(): boolean
 export declare function fontFiles(): string[]
 export declare function fontFamilies(): string[]
+/**
+ * Register a developer-supplied family (TTF/OTF paths, not woff2; one merged
+ * file per family; single-word names — use a spaceless alias first in the
+ * stack for spaced names). Process-global: call once at startup.
+ */
+export declare function registerFontFamily(name: string, files: string[]): boolean
 export declare function installPlatform(): void
 export declare function platformInfo(): {
   installed: boolean

@@ -92,6 +92,8 @@ is complete. Output dimensions always equal `width × height`.
 | `ASSET_INVALID` | Not an embedded `data:image/…` asset. |
 | `ASSET_DECODE_FAILED` | Bytes Skia cannot decode. |
 | `ASSET_TOO_LARGE` / `TOO_MANY_IMAGES` | Over 48MB per asset / 200 images. |
+| `FONT_INVALID` | Bad family name or file list in `registerFontFamily`. |
+| `FONT_FILE_MISSING` | A registered font file does not exist. |
 
 External image URLs are **never fetched** — embed images as data URLs
 (exactly what the editor stores) to render them.
@@ -152,6 +154,42 @@ The headless pass itself (`packages/headless/src/`):
 - `platform.js` — installs the Skia backend once (idempotent).
 - `fonts.js` — registers the bundled woff2 faces via `FontLibrary`.
 - `assets.js` — data-URL-only decoding with limits; clear errors otherwise.
+
+## Custom fonts
+
+The four style ids (`draw`, `sans`, `serif`, `mono`) are pluggable. A
+developer remaps an id to any CSS stack once at startup, in the browser and
+on the server alike:
+
+```javascript
+import { setFontStacks } from '@quickdrawjs/core'
+
+setFontStacks({
+  sans: "'Inter', system-ui, sans-serif",
+  mono: "'JetBrains Mono', ui-monospace, monospace",
+})
+```
+
+Measurement, drawing, the editing textarea and the toolbar previews all
+resolve through the override; `resetFontStacks()` restores the bundled
+faces. New ids work too: any `font` prop value resolves through the same
+registry.
+
+Server-side, register the files behind the names before rendering:
+
+```javascript
+import { registerFontFamily } from '@quickdrawjs/headless'
+
+registerFontFamily('Inter', ['/fonts/inter-500.ttf'])
+```
+
+Three rules (skia-canvas quirks): TTF/OTF files, not woff2; one merged file
+per family (a second file shadows the first); **single-word family names** —
+a spaced name never matches inside a font list, so alias it, e.g. stack
+`"'MySans', 'My Sans', sans-serif"` with both names registered against the
+same files. In the browser, load the same faces with `@font-face` so both
+sides shape identical outlines. Like the stacks, registration is
+process-global: configure once at startup, not per request.
 
 ## Tests
 

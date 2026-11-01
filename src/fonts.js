@@ -16,6 +16,8 @@ import { createRequire } from 'node:module'
 import { existsSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 
+import { RenderError } from './errors.js'
+
 const FAMILIES = [
   { name: 'QuickdrawHand', files: ['libre-baskerville-500.ttf'] },
   { name: 'Roboto', files: ['roboto-500.ttf'] },
@@ -50,6 +52,40 @@ export function registerFonts() {
 // True once every bundled family is usable for measurement and drawing.
 export function fontsReady() {
   return FAMILIES.every((f) => registered.has(f.name))
+}
+
+// Register a developer-supplied family for server-side use:
+//
+//   import { registerFontFamily } from '@quickdrawjs/headless'
+//   import { setFontStacks } from '@quickdrawjs/core'
+//   registerFontFamily('Inter', ['/fonts/inter-500.ttf'])
+//   setFontStacks({ sans: "'Inter', system-ui, sans-serif" })
+//
+// Rules (same quirks as the bundled faces): pass TTF/OTF files, not woff2;
+// one merged file per family (a second file would shadow the first);
+// single-word family names only — a spaced name never matches inside a
+// font list, so put a spaceless alias first in the stack instead, e.g.
+// stack "'MySans', 'My Sans', sans-serif" with registerFontFamily called
+// for both names against the same files. Like the stacks themselves this is
+// process-global: configure once at startup. Re-registering a name replaces
+// it (last registration wins).
+export function registerFontFamily(name, files) {
+  if (typeof name !== 'string' || !name.trim()) {
+    throw new RenderError('FONT_INVALID', 'font family name must be a non-empty string.')
+  }
+  if (!Array.isArray(files) || files.length === 0 || !files.every((f) => typeof f === 'string')) {
+    throw new RenderError('FONT_INVALID', `font files for '${name}' must be a non-empty array of paths.`)
+  }
+  const missing = files.filter((f) => !existsSync(f))
+  if (missing.length > 0) {
+    throw new RenderError(
+      'FONT_FILE_MISSING',
+      `font files not found for '${name}': ${missing.join(', ')}.`,
+    )
+  }
+  FontLibrary.use(name, files)
+  registered.add(name)
+  return true
 }
 
 // Family names the server registers (what the stacks' first entries match).

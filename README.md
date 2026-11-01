@@ -33,12 +33,25 @@ missing-lib errors on minimal Linux images).
 npm install @quickdrawjs/headless
 ```
 
-From this monorepo:
+**Core version note:** this package reuses the core drawing engine and needs
+`@quickdrawjs/core` with the server-renderer exports (`setShapePlatform`,
+`sortShapesForRender`, `fontStackOf`, `setFontStacks` — proposed upstream,
+unreleased at the time of writing). Until a release includes them, point the
+dependency at a build that has them:
+
+```bash
+# interim: install core from a tarball of a branch carrying the seam,
+# then install this package from git
+npm install /path/to/quickdrawjs-core-0.3.0.tgz
+npm install github:calumk/quickdrawjs-headless
+```
+
+From a checkout of this repo:
 
 ```bash
 npm install
-npm run example --workspace=@quickdrawjs/headless
-npx vitest run packages/headless
+npm run example     # render examples/board.json -> examples/board.png
+npm test            # vitest, plain Node env (no jsdom)
 ```
 
 ## API
@@ -191,8 +204,7 @@ process-global: configure once at startup, not per request.
 ## Tests
 
 ```bash
-npx vitest run packages/headless   # 23 tests, Node env (no jsdom)
-npx vitest run packages/core packages/headless
+npm test            # 26 tests, Node env (no jsdom)
 ```
 
 Coverage: blank snapshots, every shape type, z-order, highlighter-beneath,
@@ -208,8 +220,8 @@ clean-process test proving `window`/`document`/`OffscreenCanvas`/`Image`/
 `examples/` holds a generator, a realistic 12-record document and its render:
 
 ```bash
-node packages/headless/examples/make-board.mjs  # regenerate board.json
-node packages/headless/examples/basic.mjs        # render board.json -> board.png
+node examples/make-board.mjs  # regenerate board.json
+node examples/basic.mjs        # render board.json -> board.png
 ```
 
 `basic.mjs` is the clean-install path: load snapshot JSON → `renderPng` →

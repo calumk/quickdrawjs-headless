@@ -26,6 +26,9 @@
     "@quickdrawjs/core": "^0.3.0",
     "skia-canvas": "^4.0.0"
   },
+  "devDependencies": {
+    "vitest": "^3.1.0"
+  },
   "engines": {
     "node": ">=18"
   },
@@ -33,10 +36,9 @@
   "homepage": "https://tryquickdraw.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/quickdrawjs/quickdraw.git",
-    "directory": "packages/headless"
+    "url": "https://github.com/calumk/quickdrawjs-headless.git"
   },
-  "bugs": "https://github.com/quickdrawjs/quickdraw/issues",
+  "bugs": "https://github.com/calumk/quickdrawjs-headless/issues",
   "publishConfig": {
     "access": "public"
   },

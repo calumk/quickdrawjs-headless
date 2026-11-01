@@ -314,6 +314,37 @@ describe('fills, themes, backgrounds', () => {
   })
 })
 
+describe('fonts', () => {
+  it('registers the true hand face — measurement never falls back silently', async () => {
+    // ensure the platform (and its fonts) is installed
+    await renderPng(new Store().getSnapshot(), { width: 32, height: 32, padding: 0 })
+    const { fontsReady, fontFiles } = await import('../src/fonts.js')
+    expect(fontsReady()).toBe(true)
+    // TTF: skia-canvas cannot shape from the woff2 files (silent wrong face)
+    expect(fontFiles().every((f) => f.endsWith('.ttf'))).toBe(true)
+    const c = new Canvas(8, 8)
+    const ctx = c.getContext('2d')
+    const probe = 'Remember: demo on Friday'
+    ctx.font = `500 26px 'Quickdraw Hand', 'Libre Baskerville', Georgia, serif`
+    const hand = ctx.measureText(probe).width
+    // ...diverges from the generic serif a silent fallback would use
+    ctx.font = '500 26px serif'
+    expect(Math.abs(hand - ctx.measureText(probe).width)).toBeGreaterThan(10)
+    // ...and rasterizes differently from a Georgia fallback
+    const render = (font) => {
+      const c2 = new Canvas(400, 60)
+      const x2 = c2.getContext('2d')
+      x2.fillStyle = 'white'
+      x2.fillRect(0, 0, 400, 60)
+      x2.fillStyle = 'black'
+      x2.font = font
+      x2.fillText(probe, 10, 40)
+      return x2.getImageData(0, 0, 400, 60).data.join(',')
+    }
+    expect(render(`500 26px 'Quickdraw Hand'`)).not.toBe(render('500 26px Georgia'))
+  })
+})
+
 describe('determinism and concurrency', () => {
   it('renders the same snapshot to identical bytes, repeatedly', async () => {
     const snap = kitchenSink().getSnapshot()

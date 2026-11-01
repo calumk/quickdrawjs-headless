@@ -16,9 +16,18 @@ let registered = false
 export function fontFiles() {
   const require = createRequire(import.meta.url)
   const coreRoot = dirname(require.resolve('@quickdrawjs/core/package.json'))
+  const dir = join(coreRoot, 'src/fonts')
+  // Prefer TTF: skia-canvas parses woff2 metadata but cannot shape from it
+  // (silently falls back to a wrong face), while TTF renders the true face.
+  // The browser keeps using woff2 via quickdraw.css — same licensed files.
+  const ttf = [
+    join(dir, 'libre-baskerville-latin-500.ttf'),
+    join(dir, 'libre-baskerville-latin-ext-500.ttf'),
+  ]
+  if (ttf.every((f) => existsSync(f))) return ttf
   return [
-    join(coreRoot, 'src/fonts/libre-baskerville-latin-500.woff2'),
-    join(coreRoot, 'src/fonts/libre-baskerville-latin-ext-500.woff2'),
+    join(dir, 'libre-baskerville-latin-500.woff2'),
+    join(dir, 'libre-baskerville-latin-ext-500.woff2'),
   ]
 }
 

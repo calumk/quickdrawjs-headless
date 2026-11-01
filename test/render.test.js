@@ -377,6 +377,9 @@ describe('fonts', () => {
   })
 
   it('renders developer-registered custom families end to end', async () => {
+    // platform + bundled families first: registration state must not depend
+    // on which tests ran before this one
+    await renderPng(new Store().getSnapshot(), { width: 32, height: 32, padding: 0 })
     const { fontFiles, registerFontFamily } = await import('../src/fonts.js')
     const { setFontStacks, resetFontStacks } = await import('@quickdrawjs/core')
     const monoTtf = fontFiles().find((f) => f.endsWith('roboto-mono-500.ttf'))

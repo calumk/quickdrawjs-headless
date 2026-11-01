@@ -68,8 +68,25 @@
       text: s.props.text,
       lines: noteLayout(s).lines.map((l) => l.text),
     }))
+    // raw probe widths on the board's own canvas: same outlines => same numbers
+    const probe = 'Remember: demo on Friday'
+    const widths = {}
+    try {
+      const c = document.createElement('canvas').getContext('2d')
+      for (const [k, f] of [
+        ['stack', `500 20px 'Quickdraw Hand', 'Libre Baskerville', Georgia, serif`],
+        ['georgia', '500 20px Georgia, serif'],
+      ]) {
+        c.font = f
+        widths[k] = +c.measureText(probe).width.toFixed(1)
+      }
+    } catch { widths.err = 'n/a' }
+    let faces = 'n/a'
+    try { faces = [...document.fonts].map((f) => `${f.family}/${f.weight}/${f.status}`).join(', ') } catch {}
     el.innerHTML =
       `<b>browser metrics</b> Quickdraw-Hand-active=${handOk}<br>` +
+      `faces: ${faces}<br>` +
+      `probe20: ${JSON.stringify(widths)}<br>` +
       notes.map((n) => `<b>${n.id}</b> [${n.size}] ${JSON.stringify(n.text)}<br>↳ ${JSON.stringify(n.lines)}`).join('<br>')
   }
   // report twice: immediately (fallback metrics, if any) and after webfonts

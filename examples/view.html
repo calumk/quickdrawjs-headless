@@ -14,16 +14,23 @@
     border: 1px solid #ddd; border-radius: 8px; padding: 6px 10px;
     pointer-events: none;
   }
+  #metrics {
+    position: fixed; right: 12px; bottom: 10px; z-index: 10; max-width: 46ch;
+    font: 12px/1.5 ui-monospace, monospace; color: #222; background: #fff;
+    border: 1px solid #ddd; border-radius: 8px; padding: 6px 10px;
+    pointer-events: none; white-space: pre-wrap; word-break: break-word;
+  }
 </style>
 </head>
 <body>
 <div id="board"></div>
 <div id="label">Browser render of <code>board.json</code> — compare with <code>board.png</code> (headless render).</div>
+<div id="metrics"></div>
 <script type="module">
-  import { Editor, pageBounds } from '../../core/src/index.js'
+  import { Editor, pageBounds, noteLayout } from '../../core/src/index.js'
   import { boundsUnion } from '../../core/src/geometry.js'
 
-  const snapshot = await (await fetch('./board.json')).json()
+  const snapshot = await (await fetch('./board.json', { cache: 'no-store' })).json()
   const editor = new Editor({
     container: document.getElementById('board'),
     theme: 'light',
@@ -45,6 +52,29 @@
   }
   fit()
   addEventListener('resize', fit)
+
+  // Ground-truth report: which font the browser actually used for layout,
+  // and how the sticky note wrapped. Compare with the headless render —
+  // both must agree exactly (same outlines => same breaks).
+  const report = async () => {
+    try { await document.fonts.ready } catch {}
+    const el = document.getElementById('metrics')
+    const handOk = (() => {
+      try { return document.fonts.check(`500 20px 'Quickdraw Hand'`, 'Remember:') } catch { return 'n/a' }
+    })()
+    const notes = editor.store.shapes().filter((s) => s.type === 'note').map((s) => ({
+      id: s.id,
+      size: s.props.size,
+      text: s.props.text,
+      lines: noteLayout(s).lines.map((l) => l.text),
+    }))
+    el.innerHTML =
+      `<b>browser metrics</b> Quickdraw-Hand-active=${handOk}<br>` +
+      notes.map((n) => `<b>${n.id}</b> [${n.size}] ${JSON.stringify(n.text)}<br>↳ ${JSON.stringify(n.lines)}`).join('<br>')
+  }
+  // report twice: immediately (fallback metrics, if any) and after webfonts
+  report()
+  setTimeout(report, 1500)
 </script>
 </body>
 </html>

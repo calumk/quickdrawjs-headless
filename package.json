@@ -1,0 +1,52 @@
+{
+  "name": "@quickdrawjs/headless",
+  "version": "0.1.0",
+  "description": "Server-side PNG renderer for Quickdraw documents. Node.js-only, no browser or Chromium — Skia canvas backend reusing the core drawing engine.",
+  "type": "module",
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "types",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "example": "node examples/basic.mjs"
+  },
+  "dependencies": {
+    "@quickdrawjs/core": "^0.3.0",
+    "skia-canvas": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "homepage": "https://tryquickdraw.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/quickdrawjs/quickdraw.git",
+    "directory": "packages/headless"
+  },
+  "bugs": "https://github.com/quickdrawjs/quickdraw/issues",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "quickdraw",
+    "whiteboard",
+    "png",
+    "render",
+    "server-side",
+    "skia",
+    "headless"
+  ]
+}
